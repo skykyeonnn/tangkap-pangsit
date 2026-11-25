@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tangkap Pangsit – MiePangsit</title>
+<style>
+:root{--bg:#fff8e8;--card:#ffffff;--text:#3b1409;--muted:#7a4a3a;--red:#c1272d;--yellow:#ffc928;--sky:#fff1cc;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1e0f0b;--card:#2c1812;--text:#fff1dc;--muted:#d9b49c;--sky:#3a2218}}
+:root[data-theme="dark"]{--bg:#1e0f0b;--card:#2c1812;--text:#fff1dc;--muted:#d9b49c;--sky:#3a2218}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:420px;margin:0 auto;padding:14px}
+h1{font-size:1.4rem;margin:4px 0 2px;color:var(--red)}
+p.sub{margin:0 0 10px;color:var(--muted);font-size:.9rem}
+.bar{display:flex;justify-content:space-between;font-weight:700;margin-bottom:8px}
+.bar span{background:var(--card);border-radius:999px;padding:6px 14px;border:2px solid var(--yellow)}
+.wrap{position:relative}
+canvas{width:100%;display:block;border-radius:16px;background:var(--sky);border:3px solid var(--red);touch-action:none}
+.ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:20px;background:rgba(30,15,11,.72);border-radius:16px;color:#fff}
+.ov.hide{display:none}
+.ov h2{margin:0;font-size:1.5rem}
+.ov p{margin:0;font-size:.9rem;opacity:.95}
+button{font:inherit;font-weight:800;background:var(--yellow);color:#3b1409;border:0;border-radius:999px;padding:12px 30px;cursor:pointer;box-shadow:0 4px 0 var(--red)}
+button:active{transform:translateY(2px);box-shadow:0 2px 0 var(--red)}
+.note{font-size:.8rem;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<main>
+<h1>🥟 Tangkap Pangsit</h1>
+<p class="sub">Geser mangkuk, tangkap pangsit dan mie. Hindari cabai!</p>
+<div class="bar"><span>Skor: <b id="sc">0</b></span><span>⏱ <b id="tm">15</b>s</span></div>
+<div class="wrap">
+<canvas id="cv" width="360" height="480" aria-label="Area permainan"></canvas>
+<div class="ov" id="ov">
+<h2 id="ovT">Siap main?</h2>
+<p id="ovP">🥟 +10 · 🍜 +15 · 🧅 +5 · 🌶️ −10<br>Waktu 15 detik.</p>
+<button id="go">Mulai</button>
+</div>
+</div>
+<p class="note">Demo prototipe: skor hanya tampilan di browser. Koin dan kupon sungguhan hanya diterbitkan backend setelah verifikasi sesi, durasi main, dan batas skor wajar.</p>
+</main>
+<script>
+(function(){
+var cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+var W=cv.width,H=cv.height;
+var scEl=document.getElementById('sc'),tmEl=document.getElementById('tm');
+var ov=document.getElementById('ov'),ovT=document.getElementById('ovT'),ovP=document.getElementById('ovP'),go=document.getElementById('go');
+var TYPES=[{e:'🥟',v:10,w:40},{e:'🍜',v:15,w:20},{e:'🧅',v:5,w:20},{e:'🌶️',v:-10,w:20}];
+var run=false,score,left,items,bx,spawn,last,raf=0;
+var BW=80,BY=H-50;
+
+function pick(){var r=Math.random()*100,a=0;for(var i=0;i<TYPES.length;i++){a+=TYPES[i].w;if(r<a)return TYPES[i];}return TYPES[0];}
+function setX(clientX){var r=cv.getBoundingClientRect();bx=Math.max(BW/2,Math.min(W-BW/2,(clientX-r.left)/r.width*W));}
+cv.addEventListener('pointermove',function(e){if(run)setX(e.clientX);});
+cv.addEventListener('pointerdown',function(e){if(run)setX(e.clientX);});
+window.addEventListener('keydown',function(e){if(!run)return;if(e.key==='ArrowLeft')bx=Math.max(BW/2,bx-24);if(e.key==='ArrowRight')bx=Math.min(W-BW/2,bx+24);});
+
+function start(){
+cancelAnimationFrame(raf);
+score=0;left=15;items=[];bx=W/2;spawn=0;last=performance.now();run=true;
+scEl.textContent=0;tmEl.textContent=15;ov.classList.add('hide');
+raf=requestAnimationFrame(loop);
+}
+function end(){
+run=false;cancelAnimationFrame(raf);draw();
+ovT.textContent='Waktu habis! Skor: '+score;
+ovP.textContent=score>=100?'Juara! Kamu memenuhi syarat klaim (diverifikasi backend).':'Coba lagi, target 100 untuk klaim koin.';
+go.textContent='Main lagi';ov.classList.remove('hide');
+}
+function loop(t){
+if(!run)return;
+var dt=Math.min(0.05,(t-last)/1000);last=t;
+left-=dt;spawn-=dt;
+if(spawn<=0){var ty=pick();items.push({t:ty,x:20+Math.random()*(W-40),y:-20,s:110+Math.random()*90});spawn=0.35+Math.random()*0.3;}
+for(var i=items.length-1;i>=0;i--){
+var it=items[i];it.y+=it.s*dt;
+if(it.y>BY-14&&it.y<BY+16&&Math.abs(it.x-bx)<BW/2){
+score=Math.max(0,score+it.t.v);scEl.textContent=score;items.splice(i,1);
+}else if(it.y>H+20){items.splice(i,1);}
+}
+tmEl.textContent=Math.max(0,Math.ceil(left));
+draw();
+if(left<=0){end();return;}
+raf=requestAnimationFrame(loop);
+}
+function draw(){
+ctx.clearRect(0,0,W,H);
+ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.font='30px serif';
+for(var i=0;i<items.length;i++)ctx.fillText(items[i].t.e,items[i].x,items[i].y);
+if(bx==null)bx=W/2;
+ctx.fillStyle='#c1272d';
+ctx.beginPath();ctx.moveTo(bx-BW/2,BY-10);ctx.lineTo(bx+BW/2,BY-10);ctx.quadraticCurveTo(bx+BW/2-8,BY+30,bx,BY+30);ctx.quadraticCurveTo(bx-BW/2+8,BY+30,bx-BW/2,BY-10);ctx.fill();
+ctx.fillStyle='#ffc928';ctx.fillRect(bx-BW/2,BY-14,BW,6);
+}
+go.addEventListener('click',start);
+bx=W/2;draw();
+})();
+</script>
+</body>
+</html>
